@@ -7,7 +7,7 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const SUPABASE_DB_URL = Deno.env.get("SUPABASE_DB_URL")!
-const APP_URL = Deno.env.get("APP_URL") || "https://brunohrb.github.io/whoop"
+const APP_URL = Deno.env.get("APP_URL") || "https://brunohrb.github.io/saude"
 const CALLBACK_URL = `${SUPABASE_URL}/functions/v1/fitbit-auth-callback`
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
