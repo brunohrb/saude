@@ -8,7 +8,8 @@ import { supabaseFitbit } from '../lib/supabase'
 export default function Settings() {
   const { user, signOut } = useAuth()
   const { profile, syncStatus, fitbitConnected, recentSleeps, refresh } = useFitbitData()
-  const { sync, syncing, error: syncError, lastResult } = useSync(refresh)
+  const { sync, syncing, error: syncError, lastResult, syncDetail } = useSync(refresh)
+  const [showSyncLog, setShowSyncLog] = useState(false)
   const navigate = useNavigate()
   const [fitbitError, setFitbitError] = useState<string | null>(null)
 
@@ -105,10 +106,29 @@ export default function Settings() {
               <div className="border-t border-white/5 pt-3">
                 <p className="text-xs text-gray-500 mb-2">Última sincronização: {lastSync}</p>
                 {syncError && (
-                  <p className="text-xs text-red-400 mb-2">{syncError}</p>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-2">
+                    <p className="text-xs text-red-400">{syncError}</p>
+                  </div>
                 )}
                 {lastResult && (
                   <p className="text-xs text-bhr-green mb-2">{lastResult}</p>
+                )}
+                {syncDetail && syncDetail.allErrors.length > 0 && (
+                  <div className="mb-2">
+                    <button
+                      onClick={() => setShowSyncLog(v => !v)}
+                      className="text-xs text-yellow-400 underline"
+                    >
+                      {showSyncLog ? 'Ocultar' : 'Ver'} log de erros ({syncDetail.allErrors.length})
+                    </button>
+                    {showSyncLog && (
+                      <div className="mt-2 bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-3 max-h-40 overflow-y-auto">
+                        {syncDetail.allErrors.map((e, i) => (
+                          <p key={i} className="text-[10px] text-yellow-300/70 font-mono mb-1 break-all">{e}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button
                   onClick={sync}
