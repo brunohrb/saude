@@ -156,9 +156,10 @@ Deno.serve(async (req: Request) => {
         const date = new Date(Number(bucket.startTimeMillis)).toISOString().split("T")[0]
         const pts = (bucket.dataset as Record<string, unknown>[])?.[0]?.point as Record<string, unknown>[] ?? []
         if (pts.length > 0) {
-          // Pegar o valor mínimo de cada ponto (índice 2 = min) e calcular média
+          // Google Fit aggregate heart_rate.bpm: [0]=min, [1]=max, [2]=avg
+          // Usar índice 0 (mínimo) como proxy para FC em repouso
           const mins = pts
-            .map((p: Record<string, unknown>) => ((p.value as Record<string, unknown>[])?.[2] as Record<string, unknown>)?.fpVal as number ?? 0)
+            .map((p: Record<string, unknown>) => ((p.value as Record<string, unknown>[])?.[0] as Record<string, unknown>)?.fpVal as number ?? 0)
             .filter((v: number) => v > 30 && v < 200) // filtro de sanidade
           if (mins.length > 0) {
             hrMap[date] = Math.round(mins.reduce((a, b) => a + b, 0) / mins.length)
