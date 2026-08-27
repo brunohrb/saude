@@ -1,6 +1,22 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+// Rótulos amigáveis para as chaves de erro devolvidas pela edge function.
+const ERROR_LABELS: Record<string, string> = {
+  token: 'Autenticação Google',
+  cycles: 'Atividades',
+  activity: 'Atividades',
+  recovery: 'Recuperação',
+  sleep: 'Sono',
+  workout: 'Treinos',
+  steps: 'Passos',
+  distance: 'Distância',
+  calories: 'Calorias',
+  heart_rate: 'Frequência cardíaca',
+  active_minutes: 'Minutos ativos',
+  fatal: 'Erro',
+}
+
 export function useSync(onComplete?: () => void) {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -13,15 +29,22 @@ export function useSync(onComplete?: () => void) {
     try {
       const { data, error: fnError } = await supabase.functions.invoke('fitbit-sync')
       if (fnError) throw fnError
+
       const activities = data?.synced_activities ?? 0
       const sleeps = data?.synced_sleeps ?? 0
       const workouts = data?.synced_workouts ?? 0
       const recoveries = data?.synced_recoveries ?? 0
-      const errors = data?.errors ?? {}
+      const errors: Record<string, string> = data?.errors ?? {}
 
-      const httpErrors = [errors.sleep, errors.recovery, errors.workout, errors.activity].filter(Boolean)
-      if (httpErrors.length > 0) {
-        setError(`Erro da API Fitbit: ${httpErrors[0]}`)
+      // Antes só quatro chaves eram checadas, então falhas em `cycles`
+      // (ex.: coluna faltando) apareciam como "✓ 0 atividades".
+      const messages = Object.keys(errors).map(
+        key => `${ERROR_LABELS[key] ?? key}: ${errors[key]}`
+      )
+      if (data?.error && messages.length === 0) messages.push(data.error)
+
+      if (messages.length > 0) {
+        setError(messages.join(' · '))
       } else {
         setLastResult(`✓ ${activities} atividades · ${sleeps} sonos · ${recoveries} recuperações · ${workouts} treinos`)
       }
