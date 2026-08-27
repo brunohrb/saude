@@ -255,12 +255,14 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
 
     if (activeMinData.status === "rejected") errors.active_minutes = String(activeMinData.reason)
     if (stepsData.status === "rejected") errors.steps = String(stepsData.reason)
-    if (distanceData.status === "rejected") errors.distance = String(distanceData.reason)
+    if (distanceData.status === "rejected") errors.distance = "Permissão de distância pendente. Reconecte o Google Health."
     if (caloriesData.status === "rejected") errors.calories = String(caloriesData.reason)
     if (hrData.status === "rejected") errors.heart_rate = String(hrData.reason)
     if (spo2Data.status === "rejected") errors.spo2 = String(spo2Data.reason)
     if (heartPtsData.status === "rejected") errors.heart_points = String(heartPtsData.reason)
-    if (moveMinData.status === "rejected") errors.move_minutes = String(moveMinData.reason)
+    if (moveMinData.status === "rejected" && !String(moveMinData.reason).includes("no default datasource")) {
+      errors.move_minutes = "Minutos de movimento indisponíveis no Google Health."
+    }
     if (weightData.status === "rejected") errors.weight = String(weightData.reason)
 
     // ── Atividades diárias ──────────────────────────────────────────────────
