@@ -439,9 +439,12 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
             } catch { /* estágios opcionais */ }
           }
 
+          // Conflito pela chave natural (a noite), não pelo id: o Google Fit
+          // troca o id healthkit-* da mesma noite entre execuções, e era assim
+          // que a mesma noite virava várias linhas.
           const { error: sleepErr } = await supabase.schema("fitbit").from("sleep").upsert(
             sleepRows,
-            { onConflict: "fitbit_sleep_id", ignoreDuplicates: false }
+            { onConflict: "user_id,start_time,end_time", ignoreDuplicates: false }
           )
           if (sleepErr) {
             console.error("Erro upsert sleep:", JSON.stringify(sleepErr))
