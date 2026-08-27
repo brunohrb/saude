@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from "jsr:@supabase/supabase-js@2"
+import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -16,71 +16,112 @@ const CORS_HEADERS = {
 const msToNano = (ms: number) => (ms * 1_000_000).toString()
 const nanoToMs = (ns: string | number) => Math.round(Number(ns) / 1_000_000)
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS })
+interface SyncResult {
+  user_id: string
+  success: boolean
+  synced_activities: number
+  synced_recoveries: number
+  synced_sleeps: number
+  synced_workouts: number
+  errors: Record<string, string>
+  error?: string
+}
+
+// Resume os erros coletados em uma linha só, para gravar em sync_status.sync_error.
+const summarizeErrors = (errors: Record<string, string>): string | null => {
+  const keys = Object.keys(errors)
+  if (keys.length === 0) return null
+  return keys.map(k => `${k}: ${errors[k]}`).join(" | ").slice(0, 2000)
+}
+
+// Renova o access token do Google. Lança se não conseguir — seguir com um token
+// vencido só produz 401 silencioso em cada chamada da Fitness API.
+async function ensureAccessToken(
+  supabase: SupabaseClient,
+  userId: string,
+  tokenData: Record<string, unknown>,
+): Promise<string> {
+  const expiresAt = tokenData.expires_at ? new Date(tokenData.expires_at as string) : null
+  const needsRefresh = !expiresAt || expiresAt.getTime() - Date.now() < 5 * 60 * 1000
+  if (!needsRefresh) return tokenData.access_token as string
+
+  const refreshToken = tokenData.refresh_token as string | null
+  if (!refreshToken) {
+    throw new Error("Token do Google expirado e sem refresh_token. Reconecte sua conta Google.")
   }
 
-  const authHeader = req.headers.get("Authorization")
-  if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS })
+  let refreshRes: Response
+  try {
+    refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+      }),
+    })
+  } catch (e) {
+    throw new Error(`Falha de rede ao renovar token do Google: ${String(e)}`)
+  }
 
-  const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    global: { headers: { Authorization: authHeader } },
-  })
+  if (!refreshRes.ok) {
+    const body = await refreshRes.text()
+    throw new Error(
+      `Falha ao renovar token do Google (HTTP ${refreshRes.status}): ${body.slice(0, 300)}. ` +
+      `Se o erro for invalid_grant, reconecte sua conta Google.`
+    )
+  }
 
-  const { data: { user }, error: userError } = await supabaseUser.auth.getUser()
-  if (userError || !user) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS })
+  const newTokens = await refreshRes.json()
+  await supabase.schema("fitbit").from("user_tokens").update({
+    access_token: newTokens.access_token,
+    expires_at: new Date(Date.now() + (newTokens.expires_in ?? 3600) * 1000).toISOString(),
+  }).eq("user_id", userId)
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  return newTokens.access_token as string
+}
+
+async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncResult> {
+  const base: SyncResult = {
+    user_id: userId,
+    success: false,
+    synced_activities: 0,
+    synced_recoveries: 0,
+    synced_sleeps: 0,
+    synced_workouts: 0,
+    errors: {},
+  }
 
   const { data: tokenData, error: tokenError } = await supabase
     .schema("fitbit")
     .from("user_tokens")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .single()
 
   if (tokenError || !tokenData) {
-    return new Response(JSON.stringify({ error: "Google Health não conectado" }), {
-      status: 400,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    })
-  }
-
-  // Renovar token se expirado
-  let accessToken = tokenData.access_token
-  const expiresAt = tokenData.expires_at ? new Date(tokenData.expires_at) : null
-  const needsRefresh = !expiresAt || expiresAt.getTime() - Date.now() < 5 * 60 * 1000
-
-  if (needsRefresh && tokenData.refresh_token) {
-    try {
-      const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: tokenData.refresh_token,
-          client_id: GOOGLE_CLIENT_ID,
-          client_secret: GOOGLE_CLIENT_SECRET,
-        }),
-      })
-      if (refreshRes.ok) {
-        const newTokens = await refreshRes.json()
-        accessToken = newTokens.access_token
-        await supabase.schema("fitbit").from("user_tokens").update({
-          access_token: newTokens.access_token,
-          expires_at: new Date(Date.now() + (newTokens.expires_in ?? 3600) * 1000).toISOString(),
-        }).eq("user_id", user.id)
-      }
-    } catch (e) {
-      console.error("Erro ao renovar token:", e)
-    }
+    return { ...base, error: "Google Health não conectado" }
   }
 
   await supabase.schema("fitbit").from("sync_status").upsert(
-    { user_id: user.id, syncing: true, sync_error: null },
+    { user_id: userId, syncing: true, sync_error: null },
     { onConflict: "user_id" }
   )
+
+  let accessToken: string
+  try {
+    accessToken = await ensureAccessToken(supabase, userId, tokenData)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(`[${userId}] ${msg}`)
+    await supabase.schema("fitbit").from("sync_status").upsert(
+      { user_id: userId, syncing: false, sync_error: msg },
+      { onConflict: "user_id" }
+    )
+    return { ...base, error: msg, errors: { token: msg } }
+  }
 
   const headers = { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
 
@@ -193,15 +234,17 @@ Deno.serve(async (req: Request) => {
       }
       if (latestWeight) {
         await supabase.schema("fitbit").from("profiles").upsert(
-          { user_id: user.id, weight_kilogram: latestWeight },
+          { user_id: userId, weight_kilogram: latestWeight },
           { onConflict: "user_id", ignoreDuplicates: false }
         )
       }
     }
 
-    if (activeMinData.status === "rejected") errors.active_minutes = activeMinData.reason
-    if (stepsData.status === "rejected") errors.steps = stepsData.reason
-    if (distanceData.status === "rejected") errors.distance = distanceData.reason
+    if (activeMinData.status === "rejected") errors.active_minutes = String(activeMinData.reason)
+    if (stepsData.status === "rejected") errors.steps = String(stepsData.reason)
+    if (distanceData.status === "rejected") errors.distance = String(distanceData.reason)
+    if (caloriesData.status === "rejected") errors.calories = String(caloriesData.reason)
+    if (hrData.status === "rejected") errors.heart_rate = String(hrData.reason)
 
     // ── Atividades diárias ──────────────────────────────────────────────────
     try {
@@ -223,7 +266,7 @@ Deno.serve(async (req: Request) => {
           const distance = distanceMap[date] ?? null
 
           return {
-            user_id: user.id,
+            user_id: userId,
             fitbit_activity_id: date.replace(/-/g, ""),
             start_time: `${date}T00:00:00Z`,
             end_time: `${date}T23:59:59Z`,
@@ -248,7 +291,7 @@ Deno.serve(async (req: Request) => {
         )
         if (actErr) {
           console.error("Erro upsert cycles:", JSON.stringify(actErr))
-          errors.cycles = JSON.stringify(actErr)
+          errors.cycles = actErr.message ?? JSON.stringify(actErr)
         } else {
           syncedActivities += actRows.length
         }
@@ -263,7 +306,7 @@ Deno.serve(async (req: Request) => {
             // Score: RHR normalizado. 45bpm=100%, 80bpm=0%
             const score = Math.max(0, Math.min(100, Math.round(((80 - rhr) / 35) * 100)))
             return {
-              user_id: user.id,
+              user_id: userId,
               cycle_id: r.fitbit_activity_id,
               sleep_id: null,
               score_state: "SCORED",
@@ -279,7 +322,7 @@ Deno.serve(async (req: Request) => {
           const { error: recovErr } = await supabase.schema("fitbit").from("recovery").upsert(
             recovRows, { onConflict: "cycle_id", ignoreDuplicates: false }
           )
-          if (recovErr) errors.recovery = JSON.stringify(recovErr)
+          if (recovErr) errors.recovery = recovErr.message ?? JSON.stringify(recovErr)
           else syncedRecoveries += recovRows.length
         }
       }
@@ -301,7 +344,7 @@ Deno.serve(async (req: Request) => {
             const endMs = Number(s.endTimeMillis)
             const durationMs = endMs - startMs
             return {
-              user_id: user.id,
+              user_id: userId,
               fitbit_sleep_id: String(s.id),
               start_time: new Date(startMs).toISOString(),
               end_time: new Date(endMs).toISOString(),
@@ -368,13 +411,13 @@ Deno.serve(async (req: Request) => {
           )
           if (sleepErr) {
             console.error("Erro upsert sleep:", JSON.stringify(sleepErr))
-            errors.sleep = JSON.stringify(sleepErr)
+            errors.sleep = sleepErr.message ?? JSON.stringify(sleepErr)
           } else {
             syncedSleeps += sleepRows.length
           }
         }
       } else {
-        errors.sleep = `HTTP ${sleepRes.status}`
+        errors.sleep = `HTTP ${sleepRes.status} - ${(await sleepRes.text()).slice(0, 300)}`
       }
     } catch (e) { errors.sleep = String(e) }
 
@@ -391,7 +434,7 @@ Deno.serve(async (req: Request) => {
 
         if (sessions.length > 0) {
           const rows = sessions.map(s => ({
-            user_id: user.id,
+            user_id: userId,
             fitbit_workout_id: String(s.id),
             start_time: new Date(Number(s.startTimeMillis)).toISOString(),
             end_time: new Date(Number(s.endTimeMillis)).toISOString(),
@@ -414,39 +457,95 @@ Deno.serve(async (req: Request) => {
           const { error: workoutErr } = await supabase.schema("fitbit").from("workouts").upsert(
             rows, { onConflict: "fitbit_workout_id", ignoreDuplicates: false }
           )
-          if (workoutErr) errors.workout = JSON.stringify(workoutErr)
+          if (workoutErr) errors.workout = workoutErr.message ?? JSON.stringify(workoutErr)
           else syncedWorkouts += rows.length
         }
       } else {
-        errors.workout = `HTTP ${workoutRes.status}`
+        errors.workout = `HTTP ${workoutRes.status} - ${(await workoutRes.text()).slice(0, 300)}`
       }
     } catch (e) { errors.workout = String(e) }
 
+    // Qualquer erro coletado acima fica registrado — antes ele sumia e o app
+    // mostrava "✓ 0 atividades" como se tivesse dado certo.
     await supabase.schema("fitbit").from("sync_status").upsert(
-      { user_id: user.id, last_sync_at: new Date().toISOString(), syncing: false, sync_error: null },
+      {
+        user_id: userId,
+        last_sync_at: new Date().toISOString(),
+        syncing: false,
+        sync_error: summarizeErrors(errors),
+      },
       { onConflict: "user_id" }
     )
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        synced_activities: syncedActivities,
-        synced_recoveries: syncedRecoveries,
-        synced_sleeps: syncedSleeps,
-        synced_workouts: syncedWorkouts,
-        errors,
-      }),
-      { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-    )
+    return {
+      user_id: userId,
+      success: Object.keys(errors).length === 0,
+      synced_activities: syncedActivities,
+      synced_recoveries: syncedRecoveries,
+      synced_sleeps: syncedSleeps,
+      synced_workouts: syncedWorkouts,
+      errors,
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro desconhecido"
+    console.error(`[${userId}] sync falhou:`, msg)
     await supabase.schema("fitbit").from("sync_status").upsert(
-      { user_id: user.id, syncing: false, sync_error: msg },
+      { user_id: userId, syncing: false, sync_error: msg },
       { onConflict: "user_id" }
     )
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
+    return { ...base, error: msg, errors: { ...errors, fatal: msg } }
+  }
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
+
+  const authHeader = req.headers.get("Authorization")
+  if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS })
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim()
+
+  // Chamada com a service role key (pg_cron): sincroniza todos os usuários conectados.
+  if (bearer === SUPABASE_SERVICE_ROLE_KEY) {
+    const { data: rows, error } = await supabase
+      .schema("fitbit")
+      .from("user_tokens")
+      .select("user_id")
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      })
+    }
+
+    const results: SyncResult[] = []
+    for (const row of rows ?? []) {
+      results.push(await syncUser(supabase, row.user_id as string))
+    }
+
+    return new Response(JSON.stringify({ mode: "cron", synced_users: results.length, results }), {
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     })
   }
+
+  // Chamada do app: sincroniza apenas o usuário do JWT.
+  const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: authHeader } },
+  })
+
+  const { data: { user }, error: userError } = await supabaseUser.auth.getUser()
+  if (userError || !user) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS })
+
+  const result = await syncUser(supabase, user.id)
+
+  // Sempre 200: o app lê success/error/errors do corpo. Um 500 faria o
+  // supabase-js descartar o payload e o motivo real da falha se perderia.
+  return new Response(JSON.stringify(result), {
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  })
 })
