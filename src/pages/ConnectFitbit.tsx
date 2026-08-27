@@ -9,6 +9,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/fitness.location.read',
   'https://www.googleapis.com/auth/fitness.heart_rate.read',
   'https://www.googleapis.com/auth/fitness.sleep.read',
+  'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
   'https://www.googleapis.com/auth/fitness.body.read',
   'https://www.googleapis.com/auth/fitness.oxygen_saturation.read',
   'profile',
