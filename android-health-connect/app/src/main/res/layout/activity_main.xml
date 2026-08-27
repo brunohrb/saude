@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#000000" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="24dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Saúde BHR" android:textColor="#FFFFFF" android:textSize="28sp" android:textStyle="bold" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="Sincronização do sono pelo Health Connect"
+            android:textColor="#9CA3AF" android:textSize="16sp" />
+        <EditText android:id="@+id/email" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="28dp" android:hint="E-mail do Saúde BHR" android:inputType="textEmailAddress"
+            android:textColor="#FFFFFF" android:textColorHint="#6B7280" />
+        <EditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:hint="Senha" android:inputType="textPassword"
+            android:textColor="#FFFFFF" android:textColorHint="#6B7280" />
+        <Button android:id="@+id/login" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp" android:text="1. Entrar" />
+        <Button android:id="@+id/permission" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp" android:text="2. Permitir acesso ao sono" />
+        <Button android:id="@+id/sync" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp" android:text="3. Sincronizar agora" />
+        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:padding="16dp" android:background="#121212"
+            android:text="Abra o app e siga os três passos." android:textColor="#20E0C0" android:textSize="16sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:text="O aplicativo lê somente os registros de sono autorizados por você e os envia para sua conta privada no Saúde BHR."
+            android:textColor="#9CA3AF" android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>

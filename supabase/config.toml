@@ -2,3 +2,6 @@ project_id = "hisbbtddpoxufvghxqtm"
 
 [functions.fitbit-sync]
 verify_jwt = false
+
+[functions.health-connect-import]
+verify_jwt = false
