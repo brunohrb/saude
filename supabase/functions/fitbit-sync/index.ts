@@ -16,6 +16,18 @@ const CORS_HEADERS = {
 const msToNano = (ms: number) => (ms * 1_000_000).toString()
 const nanoToMs = (ns: string | number) => Math.round(Number(ns) / 1_000_000)
 
+// Fuso do usuário. O Brasil não tem horário de verão desde 2019, então um
+// offset fixo é suficiente e evita depender do fuso do runtime da edge function.
+const TZ_OFFSET = "-03:00"
+const TZ_OFFSET_MS = -3 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// Data local (YYYY-MM-DD) de um instante em ms.
+const localDate = (ms: number) => new Date(ms + TZ_OFFSET_MS).toISOString().split("T")[0]
+
+// Meia-noite local de uma data YYYY-MM-DD, em ms.
+const localMidnight = (date: string) => Date.parse(`${date}T00:00:00.000${TZ_OFFSET}`)
+
 interface SyncResult {
   user_id: string
   success: boolean
@@ -126,7 +138,11 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
   const headers = { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
 
   const now = Date.now()
-  const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000
+  // Os buckets do Google Fit começam exatamente em startTimeMillis. Ancorar a
+  // janela na meia-noite local mantém cada bucket = um dia do calendário do
+  // usuário. Sem isso, cada execução recortaria os dias num horário diferente
+  // e o cron de hora em hora reescreveria os mesmos dias com valores tortos.
+  const windowStart = localMidnight(localDate(now - 90 * DAY_MS))
 
   let syncedActivities = 0
   let syncedSleeps = 0
@@ -142,7 +158,7 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
       body: JSON.stringify({
         aggregateBy: [{ dataTypeName }],
         bucketByTime: { durationMillis: "86400000" },
-        startTimeMillis: ninetyDaysAgo.toString(),
+        startTimeMillis: windowStart.toString(),
         endTimeMillis: now.toString(),
       }),
     })
@@ -155,6 +171,16 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     const pts = (bucket.dataset as Record<string, unknown>[])?.[0]?.point as Record<string, unknown>[] ?? []
     return pts.reduce((acc: number, p: Record<string, unknown>) =>
       acc + (((p.value as Record<string, unknown>[])?.[idx] as Record<string, unknown>)?.fpVal as number ?? 0), 0)
+  }
+
+  // Soma aceitando intVal ou fpVal: heart_minutes vem como fpVal e
+  // move_minutes como intVal, então somar só um dos dois zera a métrica.
+  const sumAny = (bucket: Record<string, unknown>, idx = 0): number => {
+    const pts = (bucket.dataset as Record<string, unknown>[])?.[0]?.point as Record<string, unknown>[] ?? []
+    return pts.reduce((acc: number, p: Record<string, unknown>) => {
+      const v = (p.value as Record<string, unknown>[])?.[idx] as Record<string, unknown> | undefined
+      return acc + ((v?.intVal as number ?? 0) || (v?.fpVal as number ?? 0))
+    }, 0)
   }
 
   // Extrai soma de intVal
@@ -183,7 +209,7 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
       const out: Record<string, number> = {}
       if (settled.status !== "fulfilled") return out
       for (const bucket of (settled.value.bucket ?? []) as Record<string, unknown>[]) {
-        const date = new Date(Number(bucket.startTimeMillis)).toISOString().split("T")[0]
+        const date = localDate(Number(bucket.startTimeMillis))
         const val = extractor(bucket)
         if (val > 0) out[date] = val
       }
@@ -194,13 +220,14 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     const hrMap: Record<string, number> = {}
     if (hrData.status === "fulfilled") {
       for (const bucket of (hrData.value.bucket ?? []) as Record<string, unknown>[]) {
-        const date = new Date(Number(bucket.startTimeMillis)).toISOString().split("T")[0]
+        const date = localDate(Number(bucket.startTimeMillis))
         const pts = (bucket.dataset as Record<string, unknown>[])?.[0]?.point as Record<string, unknown>[] ?? []
         if (pts.length > 0) {
-          // Google Fit aggregate heart_rate.bpm: [0]=min, [1]=max, [2]=avg
-          // Usar índice 0 (mínimo) como proxy para FC em repouso
+          // O agregado com.google.heart_rate.summary devolve [average, max, min]
+          // — o mínimo é o índice 2, não o 0. Usar o 0 pegava a FC média do dia
+          // (80-100 bpm), o que zerava o recovery_score na fórmula abaixo.
           const mins = pts
-            .map((p: Record<string, unknown>) => ((p.value as Record<string, unknown>[])?.[0] as Record<string, unknown>)?.fpVal as number ?? 0)
+            .map((p: Record<string, unknown>) => ((p.value as Record<string, unknown>[])?.[2] as Record<string, unknown>)?.fpVal as number ?? 0)
             .filter((v: number) => v > 30 && v < 200) // filtro de sanidade
           if (mins.length > 0) {
             hrMap[date] = Math.round(mins.reduce((a, b) => a + b, 0) / mins.length)
@@ -219,8 +246,8 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
       return vals.length > 0 ? parseFloat((vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1)) : 0
     })
     const activeMinMap = mapByDate(activeMinData, b => sumInt(b))
-    const heartPtsMap = mapByDate(heartPtsData, b => sumInt(b))
-    const moveMinMap = mapByDate(moveMinData, b => sumInt(b))
+    const heartPtsMap = mapByDate(heartPtsData, b => Math.round(sumAny(b)))
+    const moveMinMap = mapByDate(moveMinData, b => Math.round(sumAny(b)))
 
     // Peso: salvar o mais recente no perfil
     if (weightData.status === "fulfilled") {
@@ -245,16 +272,16 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     if (distanceData.status === "rejected") errors.distance = String(distanceData.reason)
     if (caloriesData.status === "rejected") errors.calories = String(caloriesData.reason)
     if (hrData.status === "rejected") errors.heart_rate = String(hrData.reason)
+    if (spo2Data.status === "rejected") errors.spo2 = String(spo2Data.reason)
+    if (heartPtsData.status === "rejected") errors.heart_points = String(heartPtsData.reason)
+    if (moveMinData.status === "rejected") errors.move_minutes = String(moveMinData.reason)
+    if (weightData.status === "rejected") errors.weight = String(weightData.reason)
 
     // ── Atividades diárias ──────────────────────────────────────────────────
     try {
       // Gerar um bucket por dia nos últimos 90 dias
       const allDates: string[] = []
-      const startDay = new Date(ninetyDaysAgo)
-      startDay.setUTCHours(0, 0, 0, 0)
-      for (let d = new Date(startDay); d.getTime() <= now; d.setUTCDate(d.getUTCDate() + 1)) {
-        allDates.push(d.toISOString().split("T")[0])
-      }
+      for (let t = windowStart; t <= now; t += DAY_MS) allDates.push(localDate(t))
 
       const actRows = allDates
         .filter(date => stepsMap[date] || caloriesMap[date] || activeMinMap[date])
@@ -268,8 +295,8 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
           return {
             user_id: userId,
             fitbit_activity_id: date.replace(/-/g, ""),
-            start_time: `${date}T00:00:00Z`,
-            end_time: `${date}T23:59:59Z`,
+            start_time: `${date}T00:00:00${TZ_OFFSET}`,
+            end_time: `${date}T23:59:59${TZ_OFFSET}`,
             timezone: null,
             score_state: "SCORED",
             // Strain estimado a partir de minutos de zona cardíaca ativa
@@ -331,12 +358,19 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     // ── Sono ────────────────────────────────────────────────────────────────
     try {
       const sleepRes = await fetch(
-        `${FITNESS_API}/sessions?startTime=${new Date(ninetyDaysAgo).toISOString()}&endTime=${new Date(now).toISOString()}&activityType=72`,
+        `${FITNESS_API}/sessions?startTime=${new Date(windowStart).toISOString()}&endTime=${new Date(now).toISOString()}&activityType=72`,
         { headers }
       )
       if (sleepRes.ok) {
         const sleepData = await sleepRes.json()
-        const sessions: Record<string, unknown>[] = sleepData.session ?? []
+        const seen = new Set<string>()
+        const sessions: Record<string, unknown>[] = (sleepData.session ?? [])
+          .filter((s: Record<string, unknown>) => {
+            const key = `${s.startTimeMillis}-${s.endTimeMillis}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
 
         if (sessions.length > 0) {
           const sleepRows = sessions.map(s => {
@@ -424,7 +458,7 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     // ── Treinos ─────────────────────────────────────────────────────────────
     try {
       const workoutRes = await fetch(
-        `${FITNESS_API}/sessions?startTime=${new Date(ninetyDaysAgo).toISOString()}&endTime=${new Date(now).toISOString()}`,
+        `${FITNESS_API}/sessions?startTime=${new Date(windowStart).toISOString()}&endTime=${new Date(now).toISOString()}`,
         { headers }
       )
       if (workoutRes.ok) {

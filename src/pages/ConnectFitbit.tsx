@@ -10,6 +10,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/fitness.sleep.read',
   'https://www.googleapis.com/auth/fitness.body.read',
   'https://www.googleapis.com/auth/fitness.oxygen_saturation.read',
+  // Necessário para com.google.distance.delta — sem ele a API devolve 403.
+  'https://www.googleapis.com/auth/fitness.location.read',
   'profile',
   'email',
 ].join(' ')
