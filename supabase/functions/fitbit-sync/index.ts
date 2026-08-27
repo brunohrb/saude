@@ -134,20 +134,31 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
   let syncedRecoveries = 0
   const errors: Record<string, string> = {}
 
-  // Agrega dados por dia do Google Fit
+  // A API do Google Fit rejeita agregações diárias em intervalos longos
+  // ("aggregate duration too large"). Divide os 90 dias em blocos de 30
+  // e reúne os buckets para manter o histórico completo.
+  const MAX_AGGREGATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
   const aggregate = async (dataTypeName: string) => {
-    const res = await fetch(`${FITNESS_API}/dataset:aggregate`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        aggregateBy: [{ dataTypeName }],
-        bucketByTime: { durationMillis: "86400000" },
-        startTimeMillis: ninetyDaysAgo.toString(),
-        endTimeMillis: now.toString(),
-      }),
-    })
-    if (!res.ok) throw new Error(`aggregate ${dataTypeName}: HTTP ${res.status} - ${await res.text()}`)
-    return res.json()
+    const buckets: Record<string, unknown>[] = []
+
+    for (let chunkStart = ninetyDaysAgo; chunkStart < now; chunkStart += MAX_AGGREGATE_WINDOW_MS) {
+      const chunkEnd = Math.min(chunkStart + MAX_AGGREGATE_WINDOW_MS, now)
+      const res = await fetch(`${FITNESS_API}/dataset:aggregate`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          aggregateBy: [{ dataTypeName }],
+          bucketByTime: { durationMillis: "86400000" },
+          startTimeMillis: chunkStart.toString(),
+          endTimeMillis: chunkEnd.toString(),
+        }),
+      })
+      if (!res.ok) throw new Error(`aggregate ${dataTypeName}: HTTP ${res.status} - ${await res.text()}`)
+      const payload = await res.json()
+      buckets.push(...((payload.bucket ?? []) as Record<string, unknown>[]))
+    }
+
+    return { bucket: buckets }
   }
 
   // Extrai soma de fpVal dos pontos de um bucket
@@ -245,6 +256,10 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     if (distanceData.status === "rejected") errors.distance = String(distanceData.reason)
     if (caloriesData.status === "rejected") errors.calories = String(caloriesData.reason)
     if (hrData.status === "rejected") errors.heart_rate = String(hrData.reason)
+    if (spo2Data.status === "rejected") errors.spo2 = String(spo2Data.reason)
+    if (heartPtsData.status === "rejected") errors.heart_points = String(heartPtsData.reason)
+    if (moveMinData.status === "rejected") errors.move_minutes = String(moveMinData.reason)
+    if (weightData.status === "rejected") errors.weight = String(weightData.reason)
 
     // ── Atividades diárias ──────────────────────────────────────────────────
     try {
