@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.brunohrb.saude"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.brunohrb.saude"
