@@ -347,6 +347,98 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
       }
     } catch (e) { errors.activity = String(e) }
 
+    // ── Sono pela nova Google Health API ─────────────────────────────────────
+    // O Fitbit Air grava o sono na Google Health API v4. Esses registros não
+    // aparecem necessariamente na API antiga do Google Fit usada abaixo.
+    try {
+      const sleepUrl = new URL("https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints")
+      sleepUrl.searchParams.set("pageSize", "25")
+      sleepUrl.searchParams.set(
+        "filter",
+        `sleep.interval.end_time >= "${new Date(windowStart).toISOString()}" AND sleep.interval.end_time < "${new Date(now).toISOString()}"`
+      )
+
+      const healthSleepRes = await fetch(sleepUrl, { headers })
+      if (healthSleepRes.ok) {
+        const healthSleepData = await healthSleepRes.json()
+        const healthSleepRows = ((healthSleepData.dataPoints ?? []) as Record<string, unknown>[])
+          .map((point: Record<string, unknown>) => {
+            const sleep = point.sleep as Record<string, unknown> | undefined
+            const interval = sleep?.interval as Record<string, unknown> | undefined
+            const startTime = interval?.startTime as string | undefined
+            const endTime = interval?.endTime as string | undefined
+            if (!sleep || !startTime || !endTime) return null
+
+            const startMs = Date.parse(startTime)
+            const endMs = Date.parse(endTime)
+            if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null
+
+            let awake = 0, light = 0, deep = 0, rem = 0, genericSleep = 0
+            for (const stage of (sleep.stages ?? []) as Record<string, unknown>[]) {
+              const stageStart = Date.parse(String(stage.startTime ?? ""))
+              const stageEnd = Date.parse(String(stage.endTime ?? ""))
+              if (!Number.isFinite(stageStart) || !Number.isFinite(stageEnd) || stageEnd <= stageStart) continue
+              const duration = stageEnd - stageStart
+              const type = String(stage.type ?? "")
+              if (type === "AWAKE" || type === "RESTLESS") awake += duration
+              else if (type === "LIGHT") light += duration
+              else if (type === "DEEP") deep += duration
+              else if (type === "REM") rem += duration
+              else if (type === "ASLEEP") genericSleep += duration
+            }
+
+            const summary = sleep.summary as Record<string, unknown> | undefined
+            const summaryAsleep = Number(summary?.minutesAsleep ?? 0) * 60_000
+            if (genericSleep > 0 && light + deep + rem === 0) light = genericSleep
+            const totalSleep = summaryAsleep > 0 ? summaryAsleep : light + deep + rem
+            const inBed = endMs - startMs
+            const efficiency = inBed > 0 && totalSleep > 0
+              ? Math.min(100, Math.round((totalSleep / inBed) * 100))
+              : null
+
+            return {
+              user_id: userId,
+              fitbit_sleep_id: String(point.name ?? `google-health-${startMs}`),
+              start_time: new Date(startMs).toISOString(),
+              end_time: new Date(endMs).toISOString(),
+              timezone: null,
+              nap: inBed < 3 * 3_600_000,
+              score_state: "SCORED",
+              total_in_bed_time_milli: inBed,
+              total_awake_time_milli: awake || null,
+              total_light_sleep_time_milli: light || null,
+              total_slow_wave_sleep_time_milli: deep || null,
+              total_rem_sleep_time_milli: rem || null,
+              total_no_data_time_milli: null,
+              sleep_cycle_count: null,
+              disturbance_count: null,
+              sleep_needed_baseline_milli: null,
+              sleep_needed_from_sleep_debt_milli: null,
+              sleep_needed_from_recent_strain_milli: null,
+              sleep_needed_from_recent_nap_milli: null,
+              respiratory_rate: null,
+              sleep_performance_percentage: efficiency,
+              sleep_consistency_percentage: null,
+              sleep_efficiency_percentage: efficiency,
+            }
+          })
+          .filter(Boolean)
+
+        if (healthSleepRows.length > 0) {
+          const { error: healthSleepErr } = await supabase.schema("fitbit").from("sleep").upsert(
+            healthSleepRows,
+            { onConflict: "user_id,start_time,end_time", ignoreDuplicates: false }
+          )
+          if (healthSleepErr) errors.google_health_sleep = healthSleepErr.message ?? JSON.stringify(healthSleepErr)
+          else syncedSleeps += healthSleepRows.length
+        }
+      } else if (healthSleepRes.status !== 403) {
+        errors.google_health_sleep = `HTTP ${healthSleepRes.status} - ${(await healthSleepRes.text()).slice(0, 300)}`
+      }
+    } catch (e) {
+      errors.google_health_sleep = String(e)
+    }
+
     // ── Sono ────────────────────────────────────────────────────────────────
     try {
       const sleepRes = await fetch(
