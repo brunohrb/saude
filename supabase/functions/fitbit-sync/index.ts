@@ -351,8 +351,9 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     // O Fitbit Air grava o sono na Google Health API v4. Esses registros não
     // aparecem necessariamente na API antiga do Google Fit usada abaixo.
     try {
-      const sleepUrl = new URL("https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints")
+      const sleepUrl = new URL("https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints:reconcile")
       sleepUrl.searchParams.set("pageSize", "25")
+      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/google-wearables")
       sleepUrl.searchParams.set(
         "filter",
         `sleep.interval.end_time >= "${new Date(windowStart).toISOString()}" AND sleep.interval.end_time < "${new Date(now).toISOString()}"`
@@ -398,7 +399,7 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
 
             return {
               user_id: userId,
-              fitbit_sleep_id: String(point.name ?? `google-health-${startMs}`),
+              fitbit_sleep_id: String(point.dataPointName ?? point.name ?? `google-health-${startMs}`),
               start_time: new Date(startMs).toISOString(),
               end_time: new Date(endMs).toISOString(),
               timezone: null,
