@@ -14,6 +14,10 @@ const ERROR_LABELS: Record<string, string> = {
   calories: 'Calorias',
   heart_rate: 'Frequência cardíaca',
   active_minutes: 'Minutos ativos',
+  spo2: 'Oxigenação do sangue',
+  heart_points: 'Pontos cardíacos',
+  move_minutes: 'Minutos de movimento',
+  weight: 'Peso',
   fatal: 'Erro',
 }
 
