@@ -3,6 +3,8 @@ import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+const SUPABASE_SECRET_KEYS = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}") as Record<string, string>
+const CRON_SECRET_KEY = SUPABASE_SECRET_KEYS.default
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!
 const FITNESS_API = "https://www.googleapis.com/fitness/v1/users/me"
@@ -518,14 +520,12 @@ Deno.serve(async (req: Request) => {
   }
 
   const authHeader = req.headers.get("Authorization")
-  if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS })
-
+  const apiKey = req.headers.get("apikey")?.trim()
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim()
-
-  // Chamada com a service role key (pg_cron): sincroniza todos os usuários conectados.
-  if (bearer === SUPABASE_SERVICE_ROLE_KEY) {
+  // O pg_cron usa a nova chave secreta no header apikey. Ela nunca fica gravada
+  // no SQL: o banco lê o valor criptografado do Vault a cada execução.
+  if (apiKey && CRON_SECRET_KEY && apiKey === CRON_SECRET_KEY) {
     const { data: rows, error } = await supabase
       .schema("fitbit")
       .from("user_tokens")
@@ -549,6 +549,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // Chamada do app: sincroniza apenas o usuário do JWT.
+  if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS })
+
   const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: authHeader } },
   })
