@@ -545,8 +545,15 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim()
+  const isCronCall = req.headers.get("x-cron") === "1"
 
   // Chamada com a service role key (pg_cron): sincroniza todos os usuários conectados.
+  //
+  // A função roda com verify_jwt: false porque o gateway do Supabase recusa o JWT
+  // legado com UNAUTHORIZED_LEGACY_JWT antes de chegar aqui — é o mesmo arranjo das
+  // outras funções de cron do projeto. A autenticação é feita abaixo: ou a chave
+  // bate exatamente, ou o token precisa ser um JWT de usuário válido; qualquer
+  // outra coisa cai no 401 do final.
   if (bearer === SUPABASE_SERVICE_ROLE_KEY) {
     const { data: rows, error } = await supabase
       .schema("fitbit")
@@ -566,6 +573,18 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify({ mode: "cron", synced_users: results.length, results }), {
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    })
+  }
+
+  if (isCronCall) {
+    // Prefixos só, para diagnosticar divergência de formato de chave sem vazar segredo.
+    console.error(
+      `chamada de cron com chave que não confere: recebido ${bearer.slice(0, 8)}…, ` +
+      `esperado ${SUPABASE_SERVICE_ROLE_KEY.slice(0, 8)}…`
+    )
+    return new Response(JSON.stringify({ error: "cron key inválida" }), {
+      status: 401,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     })
   }
