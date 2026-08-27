@@ -1,0 +1,4 @@
+project_id = "hisbbtddpoxufvghxqtm"
+
+[functions.fitbit-sync]
+verify_jwt = false
