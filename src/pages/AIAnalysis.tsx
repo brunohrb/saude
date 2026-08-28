@@ -129,6 +129,7 @@ export default function AIAnalysis() {
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const briefFetched = useRef(false)
+  const messageHistoryMounted = useRef(false)
 
   // Last 7 recovery scores (oldest → newest) — data comes desc from DB, so reverse
   const last7Recovery = [...recentRecoveries]
@@ -257,6 +258,10 @@ export default function AIAnalysis() {
 
   // Scroll to bottom on new messages
   useEffect(() => {
+    if (!messageHistoryMounted.current) {
+      messageHistoryMounted.current = true
+      return
+    }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
