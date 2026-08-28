@@ -1,21 +1,22 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Recovery from './pages/Recovery'
-import Sleep from './pages/Sleep'
-import Strain from './pages/Strain'
-import Settings from './pages/Settings'
-import Health from './pages/Health'
-import AIAnalysis from './pages/AIAnalysis'
-import Treino from './pages/Treino'
-import Previsao from './pages/Previsao'
-import ConnectFitbit from './pages/ConnectFitbit'
 import BottomNav from './components/BottomNav'
 import LoadingScreen from './components/LoadingScreen'
 import { useFitbitData } from './hooks/useFitbitData'
 import { useSync } from './hooks/useSync'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Recovery = lazy(() => import('./pages/Recovery'))
+const Sleep = lazy(() => import('./pages/Sleep'))
+const Strain = lazy(() => import('./pages/Strain'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Health = lazy(() => import('./pages/Health'))
+const AIAnalysis = lazy(() => import('./pages/AIAnalysis'))
+const Treino = lazy(() => import('./pages/Treino'))
+const Previsao = lazy(() => import('./pages/Previsao'))
+const ConnectFitbit = lazy(() => import('./pages/ConnectFitbit'))
 
 function UpdateBanner() {
   const [show, setShow] = useState(false)
@@ -79,6 +80,7 @@ function AppWithAutoSync() {
     <div className="flex flex-col h-full bg-black text-white overflow-hidden">
       <UpdateBanner />
       <div className="flex-1 overflow-y-auto">
+        <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/recuperacao" element={<Recovery />} />
@@ -93,6 +95,7 @@ function AppWithAutoSync() {
           <Route path="/conectar-whoop" element={<Navigate to="/conectar-fitbit" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </div>
       <BottomNav />
     </div>

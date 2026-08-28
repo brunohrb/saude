@@ -7,6 +7,16 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 type Message = { role: 'user' | 'assistant'; content: string }
+const CHAT_STORAGE_KEY = 'bhr-coach-messages-v1'
+
+function loadSavedMessages(): Message[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? '[]')
+    return Array.isArray(value) ? value.slice(-20) : []
+  } catch {
+    return []
+  }
+}
 
 // ─── SparklineMini ───────────────────────────────────────────────────────────
 
@@ -65,9 +75,8 @@ function SparklineMini({
 
 const DAY_ABBR = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'] // Dom Seg Ter Qua Qui Sex Sab
 
-function getLast7DayLabels(): string[] {
-  const today = new Date().getDay()
-  return Array.from({ length: 7 }, (_, i) => DAY_ABBR[(today - 6 + i + 7) % 7])
+function weekdayLabel(value: string): string {
+  return DAY_ABBR[new Date(value).getDay()]
 }
 
 function recoveryStatusLabel(score: number | null | undefined): { label: string; color: string } {
@@ -92,15 +101,14 @@ export default function AIAnalysis() {
 
   const [briefing, setBriefing] = useState<string>('')
   const [briefLoading, setBriefLoading] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(loadSavedMessages)
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const briefFetched = useRef(false)
-
-  const dayLabels = getLast7DayLabels()
 
   // Last 7 recovery scores (oldest → newest) — data comes desc from DB, so reverse
   const last7Recovery = [...recentRecoveries]
@@ -109,8 +117,11 @@ export default function AIAnalysis() {
 
   // Last 7 sleep performances (oldest → newest)
   const last7Sleep = [...recentSleeps]
-    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    .sort((a, b) => new Date(a.end_time ?? 0).getTime() - new Date(b.end_time ?? 0).getTime())
     .slice(-7)
+
+  const recoveryDayLabels = last7Recovery.map(r => weekdayLabel(String(r.cycle_id).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3T12:00:00')))
+  const sleepDayLabels = last7Sleep.map(s => weekdayLabel(s.end_time ?? s.start_time))
 
   const latestRecoveryScore = last7Recovery[last7Recovery.length - 1]?.recovery_score ?? null
   const latestSleepPerf = last7Sleep[last7Sleep.length - 1]?.sleep_performance_percentage ?? null
@@ -127,6 +138,7 @@ export default function AIAnalysis() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
+    setError(null)
     const history: Message[] = isBrief
       ? [{ role: 'user', content: text }]
       : [...messages, { role: 'user', content: text }]
@@ -158,10 +170,8 @@ export default function AIAnalysis() {
       })
 
       if (!res.ok || !res.body) {
-        const err = await res.text()
-        console.error('health-ai error:', err)
-        if (isBrief) setBriefLoading(false)
-        else setStreaming(false)
+        await res.text()
+        setError('O coach não conseguiu responder agora. Tente novamente em alguns instantes.')
         return
       }
 
@@ -170,9 +180,13 @@ export default function AIAnalysis() {
       let accumulated = ''
       let buffer = ''
 
-      while (true) {
+      let reading = true
+      while (reading) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          reading = false
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
@@ -203,6 +217,7 @@ export default function AIAnalysis() {
       }
     } catch (err) {
       console.error('Stream error:', err)
+      setError(navigator.onLine ? 'A conexão com o coach foi interrompida.' : 'Você está sem internet. O coach precisa de conexão para responder.')
     } finally {
       if (isBrief) setBriefLoading(false)
       else setStreaming(false)
@@ -221,6 +236,10 @@ export default function AIAnalysis() {
   // Scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-20)))
   }, [messages])
 
   function handleSend() {
@@ -249,9 +268,9 @@ export default function AIAnalysis() {
       <div className="px-5 pt-10 pb-4">
         <div className="flex items-center gap-2 mb-1">
           <span style={{ color: '#00D4A0', fontSize: 20 }}>✦</span>
-          <h1 className="text-2xl font-bold tracking-tight">Coach</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Coach BHR</h1>
         </div>
-        <p style={{ color: '#9CA3AF', fontSize: 13 }}>Com IA e seus dados reais</p>
+        <p style={{ color: '#9CA3AF', fontSize: 13 }}>Claude Sonnet · seus dados reais · orientação diária</p>
       </div>
 
       {/* Briefing Card */}
@@ -287,7 +306,7 @@ export default function AIAnalysis() {
             </p>
             <SparklineMini values={recoveryValues} color={recoveryColor(latestRecoveryScore)} height={36} />
             <div className="flex justify-between mt-1">
-              {dayLabels.map((d, i) => (
+              {recoveryDayLabels.map((d, i) => (
                 <span key={i} style={{ color: '#6B7280', fontSize: 9 }}>{d}</span>
               ))}
             </div>
@@ -307,7 +326,7 @@ export default function AIAnalysis() {
             </p>
             <SparklineMini values={sleepValues} color="#9C59D1" height={36} />
             <div className="flex justify-between mt-1">
-              {dayLabels.map((d, i) => (
+              {sleepDayLabels.map((d, i) => (
                 <span key={i} style={{ color: '#6B7280', fontSize: 9 }}>{d}</span>
               ))}
             </div>
@@ -356,6 +375,12 @@ export default function AIAnalysis() {
         </div>
       </div>
 
+      {error && (
+        <div className="mx-4 mb-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto px-4 pb-2">
         {messages.map((msg, i) => (
@@ -398,9 +423,10 @@ export default function AIAnalysis() {
             <div className="flex flex-col gap-2">
               {[
                 'O que devo treinar hoje?',
+                'Monte meu plano de treino desta semana',
                 'Como melhorar meu sono?',
                 'Analise minha tendência de recuperação',
-                'Quais exames devo fazer?',
+                'Resuma meus principais sinais de saúde',
               ].map((prompt) => (
                 <button
                   key={prompt}

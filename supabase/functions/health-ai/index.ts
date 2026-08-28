@@ -5,6 +5,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!
+const HEALTH_AI_MODEL = Deno.env.get("HEALTH_AI_MODEL") ?? "claude-sonnet-4-5"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -39,7 +40,7 @@ function fmtDate(dateStr: string | null | undefined): string {
 }
 
 // deno-lint-ignore no-explicit-any
-function buildSystemPrompt(cycles: any[], recovery: any[], sleep: any[], workouts: any[], bloodWork: any[], journal: any[], profile: any): string {
+function buildSystemPrompt(cycles: any[], recovery: any[], sleep: any[], workouts: any[], bloodWork: any[], journal: any[], profile: any, trainingPlan: any): string {
   const now = new Date()
 
   const last7Cycles = cycles.slice(0, 7)
@@ -58,7 +59,7 @@ function buildSystemPrompt(cycles: any[], recovery: any[], sleep: any[], workout
   let sleepSection = "## Sono (últimos 7 dias)\n"
   for (const s of last7Sleep) {
     const totalSleep = (s.total_in_bed_time_milli ?? 0) - (s.total_awake_time_milli ?? 0)
-    sleepSection += `- ${fmtDate(s.start_time)}: Total ${millisToTime(totalSleep)} | Leve ${millisToTime(s.total_light_sleep_time_milli)} | Profundo ${millisToTime(s.total_slow_wave_sleep_time_milli)} | REM ${millisToTime(s.total_rem_sleep_time_milli)} | Eficiência ${fmt(s.sleep_efficiency_percentage, "%")} | Performance ${fmt(s.sleep_performance_percentage, "%")}\n`
+    sleepSection += `- ${fmtDate(s.end_time)} (dia em que acordou): Total ${millisToTime(totalSleep)} | Leve ${millisToTime(s.total_light_sleep_time_milli)} | Profundo ${millisToTime(s.total_slow_wave_sleep_time_milli)} | REM ${millisToTime(s.total_rem_sleep_time_milli)} | Eficiência ${fmt(s.sleep_efficiency_percentage, "%")} | Performance ${fmt(s.sleep_performance_percentage, "%")}\n`
   }
 
   let activitySection = "## Atividade diária (últimos 7 dias)\n"
@@ -102,9 +103,29 @@ function buildSystemPrompt(cycles: any[], recovery: any[], sleep: any[], workout
     profileSection = `## Perfil\nNome: ${name || "—"} | Peso: ${fmt(profile.weight_kilogram, " kg")} | Altura: ${profile.height_meter ? (profile.height_meter * 100).toFixed(0) + " cm" : "—"} | FC máx: ${fmt(profile.max_heart_rate, " bpm")}\n`
   }
 
-  return `Você é um coach pessoal de saúde e performance com acesso aos dados reais do usuário sincronizados via Google Fit. Analise com profundidade, identifique tendências, ofereça insights acionáveis e responda de forma personalizada, empática e baseada em evidências.
+  const trainingSection = trainingPlan
+    ? `## Planejamento de treino salvo no app\n${JSON.stringify(trainingPlan).slice(0, 6000)}\n`
+    : "## Planejamento de treino salvo no app\nNenhum plano configurado.\n"
 
-Responda sempre em português do Brasil. Seja direto e use os dados concretos ao dar recomendações. Celebre progressos e aponte áreas de atenção com clareza e sugestões concretas.
+  const newestCycle = cycles[0]?.start_time
+  const newestSleep = last7Sleep[0]?.end_time
+
+  return `Você é o Coach BHR, um coach pessoal de saúde, sono e performance com acesso aos dados reais do usuário sincronizados via Google Health/Fitbit. Seu papel é transformar sinais e tendências em decisões simples, realistas e personalizadas.
+
+REGRAS DE QUALIDADE E SEGURANÇA:
+- Responda sempre em português do Brasil, de forma direta, humana e sem jargão desnecessário.
+- Diferencie claramente fato medido, estimativa e hipótese. Nunca invente valores ausentes.
+- Confira a data de cada dado. Se sono, recuperação ou atividade estiverem desatualizados, diga isso antes de orientar.
+- Não trate score estimado como diagnóstico médico. Não diagnostique, não prescreva medicamentos e não recomende interromper tratamento.
+- Diante de sintomas graves, valores muito anormais ou risco imediato, recomende avaliação profissional/urgência de modo claro e proporcional.
+- Dê no máximo 3 prioridades por resposta, com ações específicas para hoje e uma justificativa ligada aos dados.
+- Compare tendências com o histórico do próprio usuário, não com padrões genéricos quando houver dados pessoais suficientes.
+- Para treino, considere recuperação, sono, carga recente, relato subjetivo e objetivo. Ofereça alternativa mais leve quando os dados forem incompletos.
+- Para sono, considere duração, eficiência, regularidade, estágios e horário de despertar. A noite pertence ao dia em que o usuário acordou.
+
+FRESCOR DOS DADOS:
+- Atividade mais recente: ${fmtDate(newestCycle)}
+- Sono mais recente: ${fmtDate(newestSleep)}
 
 ${profileSection}
 ---
@@ -115,6 +136,8 @@ ${sleepSection}
 ${activitySection}
 ---
 ${workoutsSection}
+---
+${trainingSection}
 ---
 ${bloodSection}
 ---
@@ -149,14 +172,15 @@ Deno.serve(async (req: Request) => {
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [cyclesRes, recoveryRes, sleepRes, workoutsRes, bloodRes, journalRes, profileRes] = await Promise.all([
+  const [cyclesRes, recoveryRes, sleepRes, workoutsRes, bloodRes, journalRes, profileRes, trainingRes] = await Promise.all([
     db.schema("fitbit").from("cycles").select("*").eq("user_id", user.id).gte("start_time", since).order("start_time", { ascending: false }).limit(30),
     db.schema("fitbit").from("recovery").select("*").eq("user_id", user.id).order("cycle_id", { ascending: false }).limit(30),
-    db.schema("fitbit").from("sleep").select("*").eq("user_id", user.id).gte("start_time", since).order("start_time", { ascending: false }).limit(30),
+    db.schema("fitbit").from("sleep").select("*").eq("user_id", user.id).gte("end_time", since).order("end_time", { ascending: false }).limit(30),
     db.schema("fitbit").from("workouts").select("*").eq("user_id", user.id).gte("start_time", since).order("start_time", { ascending: false }).limit(20),
     db.schema("fitbit").from("blood_work").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(20),
     db.schema("fitbit").from("journal").select("*").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(10),
     db.schema("fitbit").from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+    db.schema("treino").from("bhr_treinos").select("record_content").eq("user_id", user.id).maybeSingle(),
   ])
 
   const systemPrompt = buildSystemPrompt(
@@ -167,11 +191,15 @@ Deno.serve(async (req: Request) => {
     bloodRes.data ?? [],
     journalRes.data ?? [],
     profileRes.data ?? null,
+    trainingRes.data?.record_content ?? null,
   )
 
   const anthropicMessages = mode === "brief"
     ? [{ role: "user", content: "Gere um insight diário conciso (3-4 frases) sobre minha saúde com base nos dados. Mencione recuperação, sono e atividade. Termine com uma pergunta pessoal ou recomendação específica para hoje." }]
-    : messages.map(m => ({ role: m.role, content: m.content }))
+    : messages
+      .filter(m => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+      .slice(-12)
+      .map(m => ({ role: m.role, content: m.content.slice(0, 4000) }))
 
   const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -181,7 +209,7 @@ Deno.serve(async (req: Request) => {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
+      model: HEALTH_AI_MODEL,
       max_tokens: 1024,
       system: systemPrompt,
       messages: anthropicMessages,

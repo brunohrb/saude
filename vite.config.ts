@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/*.svg', 'icons/*.png'],
+      includeAssets: ['icons/*.svg'],
       manifest: {
         name: 'Saúde BHR',
         short_name: 'Saúde BHR',
@@ -20,24 +20,14 @@ export default defineConfig({
         scope: '/saude/',
         start_url: '/saude/',
         icons: [
-          { src: '/saude/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-          { src: '/saude/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: '/saude/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
         ]
       },
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/hisbbtddpoxufvghxqtm\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 24 * 60 * 60 }
-            }
-          }
-        ]
+        cleanupOutdatedCaches: true,
       }
     })
   ],

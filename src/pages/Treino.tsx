@@ -148,7 +148,7 @@ function createBeeps(audioCtx: AudioContext, secondsFromNow: number) {
       gain.gain.exponentialRampToValueAtTime(0.001, t0 + t.dur)
       osc.start(t0)
       osc.stop(t0 + t.dur + 0.05)
-    } catch {}
+    } catch { /* áudio não é suportado neste dispositivo */ }
   })
 }
 
@@ -490,7 +490,7 @@ function WorkoutTab({
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
       try {
         audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-      } catch {}
+      } catch { /* áudio não é suportado neste dispositivo */ }
     }
   }
 
@@ -1060,7 +1060,7 @@ function TimerTab() {
 
   function initAudio() {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-      try { audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)() } catch {}
+      try { audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)() } catch { /* áudio não suportado */ }
     }
     audioCtxRef.current?.resume().catch(() => {})
   }
@@ -1085,7 +1085,7 @@ function TimerTab() {
           g.gain.setValueAtTime(t.gain, t0 + t.dur - 0.05)
           g.gain.exponentialRampToValueAtTime(0.001, t0 + t.dur)
           osc.start(t0); osc.stop(t0 + t.dur + 0.05)
-        } catch {}
+        } catch { /* ignora falha isolada ao criar um tom */ }
       })
     }).catch(() => {})
   }

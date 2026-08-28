@@ -4,6 +4,7 @@ const tabs = [
   { to: '/', label: 'Hoje', icon: TodayIcon },
   { to: '/esforco', label: 'Fitness', icon: FitnessIcon },
   { to: '/sono', label: 'Sono', icon: SleepIcon },
+  { to: '/ia', label: 'Coach', icon: CoachIcon },
   { to: '/saude', label: 'Saúde', icon: HealthIcon },
 ]
 
@@ -64,6 +65,14 @@ function SleepIcon({ className, active }: { className?: string; active?: boolean
       ) : (
         <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
       )}
+    </svg>
+  )
+}
+
+function CoachIcon({ className, active }: { className?: string; active?: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={active ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l1.7 5.3L19 9l-5.3 1.7L12 16l-1.7-5.3L5 9l5.3-1.7L12 2zm7 13l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" />
     </svg>
   )
 }
