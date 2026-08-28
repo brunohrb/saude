@@ -106,6 +106,15 @@ export default function Health() {
   )
 }
 
+function localDateKey(value: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Fortaleza',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value))
+}
+
 // ─── Trends tab ───────────────────────────────────────────────────────────────
 function TrendsTab({ cycles, recoveries, sleeps }: {
   cycles: ReturnType<typeof useWhoopData>['recentCycles']
@@ -127,11 +136,21 @@ function TrendsTab({ cycles, recoveries, sleeps }: {
     .filter(d => d.strain != null && d.recovery != null)
     .map(d => ({ x: d.strain!, y: d.recovery!, date: d.date, color: recoveryColor(d.recovery) }))
 
-  const sleepData = sleeps.slice(0, 14).reverse().map(s => ({
-    date: formatShortDate(s.start_time),
-    horas: Math.round(millisToHours((s.total_in_bed_time_milli ?? 0) - (s.total_awake_time_milli ?? 0)) * 10) / 10,
-    perf: s.sleep_performance_percentage ?? null,
-  }))
+  const sleepByWakeDate = new Map(sleeps.map(s => [localDateKey(s.end_time), s]))
+  const sleepData = Array.from({ length: 14 }, (_, index) => {
+    const day = new Date()
+    day.setHours(12, 0, 0, 0)
+    day.setDate(day.getDate() - (13 - index))
+    const sleep = sleepByWakeDate.get(localDateKey(day.toISOString()))
+
+    return {
+      date: formatShortDate(day.toISOString()),
+      horas: sleep
+        ? Math.round(millisToHours((sleep.total_in_bed_time_milli ?? 0) - (sleep.total_awake_time_milli ?? 0)) * 10) / 10
+        : null,
+      perf: sleep?.sleep_performance_percentage ?? null,
+    }
+  })
 
   const tooltipStyle = { background: '#1a1a1a', border: '1px solid #ffffff15', borderRadius: 8, fontSize: 11 }
 
