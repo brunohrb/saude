@@ -168,7 +168,7 @@ export default function Settings() {
         </button>
 
         <p className="text-center text-xs text-gray-600 pb-2">
-          Saúde BHR · v1.0
+          Saúde BHR · v2.0
         </p>
       </div>
     </div>

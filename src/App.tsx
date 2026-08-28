@@ -77,7 +77,7 @@ function AppWithAutoSync() {
   }, [syncStatus?.last_sync_at])
 
   return (
-    <div className="flex flex-col h-full bg-black text-white overflow-hidden">
+    <div className="app-shell flex flex-col h-full text-white overflow-hidden">
       <UpdateBanner />
       <div className="flex-1 overflow-y-auto">
         <Suspense fallback={<LoadingScreen />}>

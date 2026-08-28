@@ -281,20 +281,23 @@ export default function AIAnalysis() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
-      style={{ background: '#0a0014', color: '#fff', fontFamily: 'system-ui, sans-serif' }}
+      className="page-premium min-h-screen flex flex-col"
+      style={{ color: '#fff', fontFamily: 'system-ui, sans-serif' }}
     >
       {/* Header */}
-      <div className="px-5 pt-10 pb-4">
+      <div className="px-5 pt-12 pb-5">
         <div className="flex items-center gap-2 mb-1">
-          <span style={{ color: '#00D4A0', fontSize: 20 }}>✦</span>
-          <h1 className="text-2xl font-bold tracking-tight">Coach BHR</h1>
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-bhr-green text-xl text-black shadow-[0_0_35px_rgba(0,212,160,0.24)]">✦</span>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Coach BHR</h1>
+            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-bhr-green">Inteligência diária</span>
+          </div>
         </div>
         <p style={{ color: '#9CA3AF', fontSize: 13 }}>Claude Sonnet · seus dados reais · orientação diária</p>
       </div>
 
       {/* Briefing Card */}
-      <div className="mx-4 mb-4 rounded-2xl p-5" style={{ background: '#16002a' }}>
+      <div className="glass-card mx-4 mb-4 rounded-3xl p-5">
         {briefLoading || (dataLoading && !briefing) ? (
           <div className="flex gap-2 items-center py-4">
             {[0, 1, 2].map((i) => (

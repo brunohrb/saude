@@ -45,11 +45,14 @@ export default function Dashboard() {
     : new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
-    <div className="min-h-full pb-6 bg-black">
+    <div className="page-premium min-h-full pb-6">
       {/* Header */}
       <div className="px-5 pt-14 pb-3 safe-top flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Hoje</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-white">Hoje</h1>
+            <span className="rounded-full border border-bhr-green/25 bg-bhr-green/10 px-2 py-0.5 text-[9px] font-bold tracking-widest text-bhr-green">BHR 2.0</span>
+          </div>
           <p className="text-xs text-gray-500 capitalize mt-0.5">{today}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -90,7 +93,7 @@ export default function Dashboard() {
           {/* Hero: Ring + Stacked cards */}
           <div className="px-4 flex gap-3" style={{ minHeight: 200 }}>
             {/* Big ring */}
-            <div className="bg-surface rounded-3xl flex flex-col items-center justify-center p-3 flex-shrink-0" style={{ width: 168 }}>
+            <div className="glass-card rounded-3xl flex flex-col items-center justify-center p-3 flex-shrink-0" style={{ width: 168 }}>
               <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wide">Recuperação</p>
               <CircleProgress
                 value={recoveryScore}

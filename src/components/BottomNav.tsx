@@ -10,16 +10,16 @@ const tabs = [
 
 export default function BottomNav() {
   return (
-    <nav className="flex-shrink-0 bg-black border-t border-white/[0.06] safe-bottom">
-      <div className="flex justify-around">
+    <nav className="flex-shrink-0 bg-[#06100d]/90 backdrop-blur-2xl border-t border-white/[0.08] safe-bottom shadow-[0_-18px_50px_rgba(0,0,0,0.35)]">
+      <div className="flex justify-around px-1">
         {tabs.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 py-3 px-4 flex-1 transition-colors ${
-                isActive ? 'text-teal-400' : 'text-gray-600'
+              `flex flex-col items-center gap-1.5 py-2.5 my-1 px-2 flex-1 rounded-2xl transition-all ${
+                isActive ? 'text-teal-300 bg-teal-300/[0.09]' : 'text-gray-600'
               }`
             }
           >
