@@ -151,6 +151,8 @@ export default function AIAnalysis() {
 
   const recovStat = recoveryStatusLabel(latestRecoveryScore)
   const sleepStat = sleepStatusLabel(latestSleepPerf)
+  const todayLabel = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' })
+    .format(new Date()).replace('.', '').toUpperCase()
 
   // ── Send function ──────────────────────────────────────────────────────────
 
@@ -284,20 +286,35 @@ export default function AIAnalysis() {
       className="page-premium min-h-screen flex flex-col"
       style={{ color: '#fff', fontFamily: 'system-ui, sans-serif' }}
     >
-      {/* Header */}
-      <div className="px-5 pt-12 pb-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-bhr-green text-xl text-black shadow-[0_0_35px_rgba(0,212,160,0.24)]">✦</span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Coach BHR</h1>
-            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-bhr-green">Inteligência diária</span>
+      {/* BHR 2.0 Hero */}
+      <div className="mx-4 mt-5 mb-4 overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#00E6AA] via-[#20D9AE] to-[#5CE1E6] p-6 text-black shadow-[0_24px_80px_rgba(0,212,160,0.18)]">
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-xl text-bhr-green">✦</span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] opacity-60">BHR Health 2.0</p>
+              <h1 className="text-xl font-black tracking-tight">Coach pessoal</h1>
+            </div>
           </div>
+          <span className="rounded-full bg-black/10 px-3 py-1.5 text-[10px] font-bold">● AO VIVO</span>
         </div>
-        <p style={{ color: '#9CA3AF', fontSize: 13 }}>Claude Sonnet · seus dados reais · orientação diária</p>
+        <p className="max-w-[290px] text-3xl font-black leading-[1.02] tracking-[-0.04em]">
+          Seu corpo.<br />Um plano claro.
+        </p>
+        <p className="mt-3 max-w-[300px] text-sm font-medium leading-relaxed opacity-65">
+          Sono, recuperação, treino e saúde analisados em conjunto pelo Claude Sonnet.
+        </p>
       </div>
 
       {/* Briefing Card */}
       <div className="glass-card mx-4 mb-4 rounded-3xl p-5">
+        <div className="mb-4 flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-bhr-green">Briefing inteligente</p>
+            <h2 className="mt-1 text-lg font-bold">O que importa hoje</h2>
+          </div>
+          <span className="rounded-xl bg-white/[0.05] px-2.5 py-1.5 text-[10px] text-gray-400">{todayLabel}</span>
+        </div>
         {briefLoading || (dataLoading && !briefing) ? (
           <div className="flex gap-2 items-center py-4">
             {[0, 1, 2].map((i) => (
