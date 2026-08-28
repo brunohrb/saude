@@ -7,8 +7,8 @@ import { recoveryColor, millisToTime, kcalFromKj, formatDate } from '../utils/wh
 
 export default function Dashboard() {
   const {
-    latestRecovery, latestSleep, latestCycle,
-    recentWorkouts,
+    latestRecovery, latestCycle,
+    recentWorkouts, recentSleeps,
     fitbitConnected, loading, refresh,
   } = useWhoopData()
   const { sync, syncing } = useSync(refresh)
@@ -16,16 +16,19 @@ export default function Dashboard() {
 
   if (loading) return <LoadingScreen />
 
+  const dashboardDateKey = localDateKey(latestCycle?.start_time ?? new Date().toISOString())
+  const dashboardSleep = recentSleeps.find(sleep => localDateKey(sleep.end_time) === dashboardDateKey) ?? null
+
   const recoveryScore = latestRecovery?.recovery_score ?? null
-  const sleepScore = latestSleep?.sleep_performance_percentage ?? null
+  const sleepScore = dashboardSleep?.sleep_performance_percentage ?? null
   const strain = latestCycle?.strain ?? null
   const calories = kcalFromKj(latestCycle?.kilojoule) || null
   const restingHR = latestRecovery?.resting_heart_rate ? Math.round(latestRecovery.resting_heart_rate) : null
   const spo2 = latestRecovery?.spo2_percentage?.toFixed(1) ?? null
   const skinTemp = latestRecovery?.skin_temp_celsius?.toFixed(1) ?? null
 
-  const totalSleepMs = latestSleep
-    ? (latestSleep.total_in_bed_time_milli ?? 0) - (latestSleep.total_awake_time_milli ?? 0)
+  const totalSleepMs = dashboardSleep
+    ? (dashboardSleep.total_in_bed_time_milli ?? 0) - (dashboardSleep.total_awake_time_milli ?? 0)
     : null
 
   const ringColor = recoveryColor(recoveryScore)
@@ -212,6 +215,15 @@ export default function Dashboard() {
       )}
     </div>
   )
+}
+
+function localDateKey(value: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Fortaleza',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value))
 }
 
 function ActivityCard({ icon, label, value, unit }: { icon: string; label: string; value: string; unit: string }) {
