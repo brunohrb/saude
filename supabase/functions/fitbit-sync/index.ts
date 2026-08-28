@@ -352,11 +352,12 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     // aparecem necessariamente na API antiga do Google Fit usada abaixo.
     try {
       const sleepUrl = new URL("https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints:reconcile")
-      sleepUrl.searchParams.set("pageSize", "25")
-      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/google-wearables")
+      sleepUrl.searchParams.set("page_size", "100")
+      // Inclui os dados do Fitbit, do Google e registros feitos pelo app.
+      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/google-sources")
       sleepUrl.searchParams.set(
         "filter",
-        `sleep.interval.end_time >= "${new Date(windowStart).toISOString()}" AND sleep.interval.end_time < "${new Date(now).toISOString()}"`
+        `sleep.interval.civil_end_time >= "${new Date(ninetyDaysAgo).toISOString().split("T")[0]}"`
       )
 
       const healthSleepRes = await fetch(sleepUrl, { headers })
@@ -390,6 +391,15 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
 
             const summary = sleep.summary as Record<string, unknown> | undefined
             const summaryAsleep = Number(summary?.minutesAsleep ?? 0) * 60_000
+            // Alguns dispositivos Fitbit devolvem os totais dos estágios no
+            // resumo, mesmo quando a linha do tempo detalhada está incompleta.
+            for (const item of (summary?.stagesSummary ?? []) as Record<string, unknown>[]) {
+              const duration = Number(item.minutes ?? 0) * 60_000
+              if (String(item.type) === "AWAKE" && awake === 0) awake = duration
+              else if (String(item.type) === "LIGHT" && light === 0) light = duration
+              else if (String(item.type) === "DEEP" && deep === 0) deep = duration
+              else if (String(item.type) === "REM" && rem === 0) rem = duration
+            }
             if (genericSleep > 0 && light + deep + rem === 0) light = genericSleep
             const totalSleep = summaryAsleep > 0 ? summaryAsleep : light + deep + rem
             const inBed = endMs - startMs
