@@ -11,7 +11,7 @@ const tabs = [
 export default function BottomNav() {
   return (
     <nav className="flex-shrink-0 bg-[#06100d]/90 backdrop-blur-2xl border-t border-white/[0.08] safe-bottom shadow-[0_-18px_50px_rgba(0,0,0,0.35)]">
-      <div className="flex justify-around px-1">
+      <div className="mx-auto flex w-full max-w-[760px] justify-around px-1">
         {tabs.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

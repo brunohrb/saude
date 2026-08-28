@@ -8,7 +8,7 @@ import { recoveryColor, millisToTime, kcalFromKj, formatDate } from '../utils/wh
 export default function Dashboard() {
   const {
     latestRecovery, latestCycle,
-    recentWorkouts, recentSleeps,
+    recentWorkouts, recentSleeps, profile,
     fitbitConnected, loading, refresh,
   } = useWhoopData()
   const { sync, syncing } = useSync(refresh)
@@ -43,23 +43,26 @@ export default function Dashboard() {
   const today = latestCycle?.start_time
     ? formatDate(latestCycle.start_time)
     : new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const firstName = profile?.first_name || 'Bruno'
 
   return (
     <div className="page-premium min-h-full pb-6">
-      {/* Header */}
-      <div className="px-5 pt-14 pb-3 safe-top flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-white">Hoje</h1>
-            <span className="rounded-full border border-bhr-green/25 bg-bhr-green/10 px-2 py-0.5 text-[9px] font-bold tracking-widest text-bhr-green">BHR 2.0</span>
+      {/* BHR 2.0 daily hero */}
+      <div className="mx-4 mt-4 mb-4 rounded-[2rem] bg-gradient-to-br from-[#00E6AA] via-[#20D9AE] to-[#5CE1E6] p-6 text-black shadow-[0_24px_80px_rgba(0,212,160,0.16)] safe-top flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="mb-6 flex items-center gap-2">
+            <span className="rounded-full bg-black px-3 py-1 text-[9px] font-black tracking-[0.2em] text-bhr-green">BHR 2.0</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Resumo diário</span>
           </div>
-          <p className="text-xs text-gray-500 capitalize mt-0.5">{today}</p>
+          <p className="text-sm font-semibold opacity-60">Bom dia, {firstName}</p>
+          <h1 className="mt-1 text-3xl font-black leading-none tracking-[-0.045em]">Seu dia<br />em números.</h1>
+          <p className="text-xs capitalize mt-3 font-medium opacity-55">{today}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={sync}
             disabled={syncing}
-            className="text-gray-400 w-9 h-9 flex items-center justify-center rounded-full bg-white/5 disabled:opacity-40 text-base"
+            className="text-black w-10 h-10 flex items-center justify-center rounded-2xl bg-black/10 disabled:opacity-40 text-base"
           >
             {syncing ? (
               <span className="animate-spin inline-block">↻</span>
@@ -67,7 +70,7 @@ export default function Dashboard() {
           </button>
           <Link
             to="/configuracoes"
-            className="text-gray-400 w-9 h-9 flex items-center justify-center rounded-full bg-white/5"
+            className="text-black w-10 h-10 flex items-center justify-center rounded-2xl bg-black/10"
           >
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
               <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>

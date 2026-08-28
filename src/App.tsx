@@ -80,6 +80,7 @@ function AppWithAutoSync() {
     <div className="app-shell flex flex-col h-full text-white overflow-hidden">
       <UpdateBanner />
       <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto min-h-full w-full max-w-[760px]">
         <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -96,6 +97,7 @@ function AppWithAutoSync() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
+        </div>
       </div>
       <BottomNav />
     </div>
