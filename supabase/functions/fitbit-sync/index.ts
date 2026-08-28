@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -352,9 +352,9 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
     // aparecem necessariamente na API antiga do Google Fit usada abaixo.
     try {
       const sleepUrl = new URL("https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints:reconcile")
-      sleepUrl.searchParams.set("page_size", "100")
+      sleepUrl.searchParams.set("pageSize", "25")
       // Inclui os dados do Fitbit, do Google e registros feitos pelo app.
-      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/google-sources")
+      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/google-wearables")
       sleepUrl.searchParams.set(
         "filter",
         `sleep.interval.civil_end_time >= "${new Date(ninetyDaysAgo).toISOString().split("T")[0]}"`
@@ -527,9 +527,13 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
             } catch { /* estágios opcionais */ }
           }
 
+          const dedupedSleepRows = Array.from(new Map(
+            sleepRows.map(row => [`${row.user_id}|${row.start_time}|${row.end_time}`, row])
+          ).values())
+
           const { error: sleepErr } = await supabase.schema("fitbit").from("sleep").upsert(
-            sleepRows,
-            { onConflict: "fitbit_sleep_id", ignoreDuplicates: false }
+            dedupedSleepRows,
+            { onConflict: "user_id,start_time,end_time", ignoreDuplicates: false }
           )
           if (sleepErr) {
             console.error("Erro upsert sleep:", JSON.stringify(sleepErr))
