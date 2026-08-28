@@ -106,7 +106,8 @@ export default function Health() {
   )
 }
 
-function localDateKey(value: string): string {
+function localDateKey(value: string | null | undefined): string {
+  if (!value) return ''
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Fortaleza',
     year: 'numeric',

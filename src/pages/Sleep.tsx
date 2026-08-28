@@ -19,7 +19,11 @@ export default function Sleep() {
 
   if (loading) return <LoadingScreen />
 
-  const latestSleep = recentSleeps[dayIndex] ?? null
+  const selectedDay = new Date()
+  selectedDay.setHours(12, 0, 0, 0)
+  selectedDay.setDate(selectedDay.getDate() - dayIndex)
+  const selectedDateKey = localDateKey(selectedDay.toISOString())
+  const latestSleep = recentSleeps.find(sleep => localDateKey(sleep.end_time) === selectedDateKey) ?? null
 
   const perfScore = latestSleep?.sleep_performance_percentage ?? null
   const totalSleep = (latestSleep?.total_in_bed_time_milli ?? 0) - (latestSleep?.total_awake_time_milli ?? 0)
@@ -31,15 +35,22 @@ export default function Sleep() {
       + (latestSleep.sleep_needed_from_recent_nap_milli ?? 0)
     : 0
 
-  const chartData = recentSleeps
-    .slice(0, 14)
-    .reverse()
-    .map(s => ({
-      date: formatShortDate(s.start_time),
-      horas: Math.round(millisToHours(
-        (s.total_in_bed_time_milli ?? 0) - (s.total_awake_time_milli ?? 0)
-      ) * 10) / 10,
-    }))
+  const sleepByWakeDate = new Map(recentSleeps.map(sleep => [localDateKey(sleep.end_time), sleep]))
+  const chartData = Array.from({ length: 14 }, (_, index) => {
+    const day = new Date()
+    day.setHours(12, 0, 0, 0)
+    day.setDate(day.getDate() - (13 - index))
+    const sleep = sleepByWakeDate.get(localDateKey(day.toISOString()))
+
+    return {
+      date: formatShortDate(day.toISOString()),
+      horas: sleep
+        ? Math.round(millisToHours(
+          (sleep.total_in_bed_time_milli ?? 0) - (sleep.total_awake_time_milli ?? 0)
+        ) * 10) / 10
+        : null,
+    }
+  })
 
   const last7Naps = recentNaps.slice(0, 7)
 
@@ -47,10 +58,10 @@ export default function Sleep() {
     <div className="pb-6">
       <PageHeader
         title="Sono"
-        date={latestSleep?.start_time}
+        date={selectedDay.toISOString()}
         onPrev={() => setDayIndex(i => i + 1)}
         onNext={() => setDayIndex(i => i - 1)}
-        hasPrev={dayIndex < recentSleeps.length - 1}
+        hasPrev={dayIndex < 59}
         hasNext={dayIndex > 0}
         right={
           <button
@@ -227,6 +238,16 @@ export default function Sleep() {
       )}
     </div>
   )
+}
+
+function localDateKey(value: string | null | undefined): string {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Fortaleza',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value))
 }
 
 function BreakdownRow({ label, value, color }: { label: string; value: string; color: string }) {

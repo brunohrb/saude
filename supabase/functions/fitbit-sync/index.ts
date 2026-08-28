@@ -360,10 +360,31 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
         `sleep.interval.civil_end_time >= "${new Date(ninetyDaysAgo).toISOString().split("T")[0]}"`
       )
 
-      const healthSleepRes = await fetch(sleepUrl, { headers })
-      if (healthSleepRes.ok) {
+      const healthSleepPoints: Record<string, unknown>[] = []
+      let nextPageToken: string | undefined
+      let healthSleepHttpError: string | null = null
+
+      do {
+        if (nextPageToken) sleepUrl.searchParams.set("pageToken", nextPageToken)
+        else sleepUrl.searchParams.delete("pageToken")
+
+        const healthSleepRes = await fetch(sleepUrl, { headers })
+        if (!healthSleepRes.ok) {
+          if (healthSleepRes.status !== 403) {
+            healthSleepHttpError = `HTTP ${healthSleepRes.status} - ${(await healthSleepRes.text()).slice(0, 300)}`
+          }
+          break
+        }
+
         const healthSleepData = await healthSleepRes.json()
-        const healthSleepRows = ((healthSleepData.dataPoints ?? []) as Record<string, unknown>[])
+        healthSleepPoints.push(...((healthSleepData.dataPoints ?? []) as Record<string, unknown>[]))
+        nextPageToken = healthSleepData.nextPageToken as string | undefined
+      } while (nextPageToken)
+
+      if (healthSleepHttpError) errors.google_health_sleep = healthSleepHttpError
+
+      if (healthSleepPoints.length > 0) {
+        const healthSleepRows = healthSleepPoints
           .map((point: Record<string, unknown>) => {
             const sleep = point.sleep as Record<string, unknown> | undefined
             const interval = sleep?.interval as Record<string, unknown> | undefined
@@ -443,8 +464,6 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
           if (healthSleepErr) errors.google_health_sleep = healthSleepErr.message ?? JSON.stringify(healthSleepErr)
           else syncedSleeps += healthSleepRows.length
         }
-      } else if (healthSleepRes.status !== 403) {
-        errors.google_health_sleep = `HTTP ${healthSleepRes.status} - ${(await healthSleepRes.text()).slice(0, 300)}`
       }
     } catch (e) {
       errors.google_health_sleep = String(e)
@@ -539,7 +558,7 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
             console.error("Erro upsert sleep:", JSON.stringify(sleepErr))
             errors.sleep = sleepErr.message ?? JSON.stringify(sleepErr)
           } else {
-            syncedSleeps += sleepRows.length
+            syncedSleeps += dedupedSleepRows.length
           }
         }
       } else {

@@ -59,7 +59,7 @@ export function useFitbitData(): FitbitData {
         supabase.from('profiles').select('*').single(),
         supabase.from('cycles').select('*').order('start_time', { ascending: false }).limit(30),
         supabase.from('workouts').select('*').order('start_time', { ascending: false }).limit(20),
-        supabase.from('sleep').select('*').order('start_time', { ascending: false }).limit(60),
+        supabase.from('sleep').select('*').order('end_time', { ascending: false }).limit(60),
         supabase.from('sync_status').select('*').single(),
         supabase.from('blood_work').select('*').order('test_date', { ascending: false }).limit(200),
         supabase.from('journal').select('*').order('entry_date', { ascending: false }).limit(90),
