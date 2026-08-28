@@ -18,6 +18,26 @@ function loadSavedMessages(): Message[] {
   }
 }
 
+function RichCoachText({ text }: { text: string }) {
+  const renderInline = (value: string) => value.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={index} className="font-semibold text-white">{part.slice(2, -2)}</strong>
+      : part
+  )
+
+  return (
+    <div className="space-y-2">
+      {text.split('\n').filter(Boolean).map((line, index) => {
+        const heading = line.match(/^#{1,3}\s+(.*)$/)
+        if (heading) return <p key={index} className="text-base font-bold text-white">{renderInline(heading[1])}</p>
+        const bullet = line.match(/^[-•]\s+(.*)$/)
+        if (bullet) return <p key={index} className="pl-3 before:content-['•'] before:-ml-3 before:mr-2 before:text-bhr-green">{renderInline(bullet[1])}</p>
+        return <p key={index}>{renderInline(line)}</p>
+      })}
+    </div>
+  )
+}
+
 // ─── SparklineMini ───────────────────────────────────────────────────────────
 
 function SparklineMini({
@@ -291,9 +311,9 @@ export default function AIAnalysis() {
             <style>{`@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }`}</style>
           </div>
         ) : briefing ? (
-          <p className="text-lg leading-relaxed" style={{ color: '#F3F4F6' }}>
-            {briefing}
-          </p>
+          <div className="text-base leading-relaxed" style={{ color: '#F3F4F6' }}>
+            <RichCoachText text={briefing} />
+          </div>
         ) : null}
 
         {/* Metric Cards */}
@@ -396,7 +416,9 @@ export default function AIAnalysis() {
                   : { background: '#16002a', color: '#F3F4F6' }
               }
             >
-              {msg.content || (
+              {msg.content ? (
+                msg.role === 'assistant' ? <RichCoachText text={msg.content} /> : msg.content
+              ) : (
                 <span className="inline-flex gap-1">
                   {[0, 1, 2].map((j) => (
                     <span
