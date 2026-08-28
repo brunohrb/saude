@@ -354,7 +354,7 @@ async function syncUser(supabase: SupabaseClient, userId: string): Promise<SyncR
       const sleepUrl = new URL("https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints:reconcile")
       sleepUrl.searchParams.set("pageSize", "25")
       // Inclui os dados do Fitbit, do Google e registros feitos pelo app.
-      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/google-wearables")
+      sleepUrl.searchParams.set("dataSourceFamily", "users/me/dataSourceFamilies/all-sources")
       sleepUrl.searchParams.set(
         "filter",
         `sleep.interval.civil_end_time >= "${new Date(ninetyDaysAgo).toISOString().split("T")[0]}"`
