@@ -47,7 +47,7 @@ export default function Strain() {
     }))
 
   return (
-    <div className="pb-8">
+    <div className="page-premium pb-8">
       <PageHeader
         title="Esforço"
         date={latestCycle?.start_time}

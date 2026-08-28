@@ -12,16 +12,17 @@ interface Props {
 
 export default function PageHeader({ title, date, right, onPrev, onNext, hasPrev, hasNext }: Props) {
   return (
-    <div className="flex items-start justify-between px-5 pt-14 pb-4 safe-top">
+    <div className="mb-3 flex items-start justify-between border-b border-white/[0.06] bg-gradient-to-b from-bhr-green/[0.08] to-transparent px-5 pt-14 pb-5 safe-top">
       <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
+        <p className="mb-1 text-[9px] font-black uppercase tracking-[0.24em] text-bhr-green">BHR Health 2.0</p>
+        <h1 className="text-3xl font-black tracking-[-0.035em]">{title}</h1>
         {date && (
           <div className="flex items-center gap-2 mt-0.5">
             {onPrev && (
               <button
                 onClick={onPrev}
                 disabled={!hasPrev}
-                className="text-gray-400 disabled:opacity-20 text-base leading-none px-1 -ml-1"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05] text-gray-300 disabled:opacity-20 text-base leading-none -ml-1"
               >
                 ‹
               </button>
@@ -31,7 +32,7 @@ export default function PageHeader({ title, date, right, onPrev, onNext, hasPrev
               <button
                 onClick={onNext}
                 disabled={!hasNext}
-                className="text-gray-400 disabled:opacity-20 text-base leading-none px-1"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05] text-gray-300 disabled:opacity-20 text-base leading-none"
               >
                 ›
               </button>

@@ -73,19 +73,21 @@ export default function Health() {
   if (loading) return <LoadingScreen />
 
   return (
-    <div className="pb-8">
-      <div className="px-5 pt-14 pb-3 safe-top">
-        <h1 className="text-2xl font-bold">Saúde</h1>
+    <div className="page-premium pb-8">
+      <div className="border-b border-white/[0.06] bg-gradient-to-b from-bhr-green/[0.08] to-transparent px-5 pt-14 pb-5 safe-top">
+        <p className="mb-1 text-[9px] font-black uppercase tracking-[0.24em] text-bhr-green">BHR Health 2.0</p>
+        <h1 className="text-3xl font-black tracking-[-0.035em]">Saúde</h1>
+        <p className="mt-1 text-xs text-gray-500">Tendências, diário e exames em um só lugar</p>
       </div>
 
       {/* 3-tab bar */}
-      <div className="flex mx-4 bg-surface rounded-xl p-1 mb-4 gap-1">
+      <div className="glass-card flex mx-4 mt-4 rounded-2xl p-1.5 mb-4 gap-1">
         {([['tendencias', 'Tendências'], ['diario', 'Diário'], ['exames', 'Exames']] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
-              tab === id ? 'bg-white/10 text-white' : 'text-gray-500'
+              tab === id ? 'bg-bhr-green text-black shadow-lg' : 'text-gray-500'
             }`}
           >
             {label}

@@ -71,7 +71,7 @@ export default function Recovery() {
     : null
 
   return (
-    <div className="pb-6">
+    <div className="page-premium pb-6">
       <PageHeader
         title="Recuperação"
         date={selectedCycle?.start_time}

@@ -9,7 +9,7 @@ interface Props {
 
 export default function MetricCard({ label, value, unit, sub, color, icon }: Props) {
   return (
-    <div className="bg-surface rounded-2xl p-4 flex flex-col gap-1">
+    <div className="glass-card rounded-2xl p-4 flex flex-col gap-1">
       <div className="flex items-center gap-2 text-gray-400 text-xs font-medium uppercase tracking-wider">
         {icon}
         {label}

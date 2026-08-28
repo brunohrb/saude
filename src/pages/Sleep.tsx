@@ -55,7 +55,7 @@ export default function Sleep() {
   const last7Naps = recentNaps.slice(0, 7)
 
   return (
-    <div className="pb-6">
+    <div className="page-premium pb-6">
       <PageHeader
         title="Sono"
         date={selectedDay.toISOString()}

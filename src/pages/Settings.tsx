@@ -40,9 +40,11 @@ export default function Settings() {
     : null
 
   return (
-    <div className="pb-6">
-      <div className="px-5 pt-14 pb-4 safe-top">
-        <h1 className="text-2xl font-bold">Configurações</h1>
+    <div className="page-premium pb-6">
+      <div className="border-b border-white/[0.06] bg-gradient-to-b from-bhr-green/[0.08] to-transparent px-5 pt-14 pb-5 safe-top">
+        <p className="mb-1 text-[9px] font-black uppercase tracking-[0.24em] text-bhr-green">BHR Health 2.0</p>
+        <h1 className="text-3xl font-black tracking-[-0.035em]">Configurações</h1>
+        <p className="mt-1 text-xs text-gray-500">Conta, integrações e preferências do aplicativo</p>
       </div>
 
       <div className="px-4 flex flex-col gap-4">

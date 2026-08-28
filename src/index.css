@@ -72,6 +72,12 @@
   * { scrollbar-width: none; }
 }
 
+.bg-surface {
+  background: linear-gradient(145deg, rgba(19, 31, 28, 0.96), rgba(10, 16, 15, 0.94)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
 @layer utilities {
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
   .safe-top { padding-top: env(safe-area-inset-top); }
